@@ -1,0 +1,253 @@
+services:
+  flight-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: flights
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - flight-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  flight-flyway:
+    image: flyway/flyway:10
+    depends_on:
+      flight-db:
+        condition: service_healthy
+    command: -url=jdbc:postgresql://flight-db:5432/flights -user=postgres -password=postgres migrate
+    volumes:
+      - ./flight-service/db/migrations:/flyway/sql
+    networks:
+      - backend
+    restart: "no"
+
+  booking-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bookings
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  booking-flyway:
+    image: flyway/flyway:10
+    depends_on:
+      booking-db:
+        condition: service_healthy
+    command: -url=jdbc:postgresql://booking-db:5432/bookings -user=postgres -password=postgres migrate
+    volumes:
+      - ./booking-service/db/migrations:/flyway/sql
+    networks:
+      - backend
+    restart: "no"
+
+  redis-master:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-master-data:/data
+    networks:
+      - redis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  redis-replica-1:
+    image: redis:7-alpine
+    command: redis-server --replicaof redis-master 6379 --appendonly yes
+    depends_on:
+      - redis-master
+    volumes:
+      - redis-replica-1-data:/data
+    networks:
+      - redis-net
+    restart: unless-stopped
+
+  redis-replica-2:
+    image: redis:7-alpine
+    command: redis-server --replicaof redis-master 6379 --appendonly yes
+    depends_on:
+      - redis-master
+    volumes:
+      - redis-replica-2-data:/data
+    networks:
+      - redis-net
+    restart: unless-stopped
+
+  redis-sentinel-1:
+    image: redis:7-alpine
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        mkdir -p /etc/redis;
+        cat > /etc/redis/sentinel.conf <<'EOF'
+        port 26379
+        bind 0.0.0.0
+        protected-mode no
+        daemonize no
+        logfile \"\"
+        sentinel monitor mymaster redis-master 6379 2
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 60000
+        sentinel parallel-syncs mymaster 1
+        sentinel announce-ip redis-sentinel-1
+        sentinel announce-port 26379
+        EOF
+        echo '[Sentinel-1] Config:'; cat /etc/redis/sentinel.conf;
+        exec redis-server /etc/redis/sentinel.conf --sentinel
+      "
+    ports:
+      - "26379:26379"
+    networks:
+      redis-net:
+        aliases:
+          - redis-sentinel-1
+    restart: unless-stopped
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        mkdir -p /etc/redis;
+        cat > /etc/redis/sentinel.conf <<'EOF'
+        port 26379
+        bind 0.0.0.0
+        protected-mode no
+        daemonize no
+        logfile \"\"
+        sentinel monitor mymaster redis-master 6379 2
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 60000
+        sentinel parallel-syncs mymaster 1
+        sentinel announce-ip redis-sentinel-2
+        sentinel announce-port 26379
+        EOF
+        echo '[Sentinel-2] Config:'; cat /etc/redis/sentinel.conf;
+        exec redis-server /etc/redis/sentinel.conf --sentinel
+      "
+    ports:
+      - "26380:26379"
+    networks:
+      redis-net:
+        aliases:
+          - redis-sentinel-2
+    restart: unless-stopped
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    depends_on:
+      - redis-master
+    command: >
+      sh -c "
+        mkdir -p /etc/redis;
+        cat > /etc/redis/sentinel.conf <<'EOF'
+        port 26379
+        bind 0.0.0.0
+        protected-mode no
+        daemonize no
+        logfile \"\"
+        sentinel monitor mymaster redis-master 6379 2
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 60000
+        sentinel parallel-syncs mymaster 1
+        sentinel announce-ip redis-sentinel-3
+        sentinel announce-port 26379
+        EOF
+        echo '[Sentinel-3] Config:'; cat /etc/redis/sentinel.conf;
+        exec redis-server /etc/redis/sentinel.conf --sentinel
+      "
+    ports:
+      - "26381:26379"
+    networks:
+      redis-net:
+        aliases:
+          - redis-sentinel-3
+    restart: unless-stopped
+
+  flight-service:
+    build:
+      context: .
+      dockerfile: flight-service/Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      - REDIS_SENTINEL_MASTER=mymaster
+      - CACHE_TTL=300
+      - FLIGHT_SERVICE_API_KEY=${FLIGHT_SERVICE_API_KEY:-super-secret-key-123}
+    depends_on:
+      flight-db:
+        condition: service_healthy
+      flight-flyway:
+        condition: service_completed_successfully
+      redis-master:
+        condition: service_healthy
+      redis-sentinel-1:
+        condition: service_started
+    networks:
+      - backend
+      - redis-net
+    restart: unless-stopped
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking-service/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - FLIGHT_SERVICE_API_KEY=${FLIGHT_SERVICE_API_KEY:-super-secret-key-123}
+      - CB_FAILURE_THRESHOLD=5
+      - CB_RESET_TIMEOUT=30
+      - CB_WINDOW_SECONDS=60
+      - RETRY_MAX_ATTEMPTS=3
+      - RETRY_BACKOFF_BASE=100
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      booking-flyway:
+        condition: service_completed_successfully
+      flight-service:
+        condition: service_started
+    networks:
+      - backend
+      - redis-net
+    restart: unless-stopped
+
+
+networks:
+  backend:
+    driver: bridge
+  redis-net:
+    driver: bridge
+
+
+volumes:
+  flight-db-data:
+  booking-db-data:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:

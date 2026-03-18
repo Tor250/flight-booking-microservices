@@ -1,0 +1,9 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+psycopg2-binary==2.9.9
+grpcio==1.60.0
+grpcio-tools==1.60.0
+googleapis-common-protos==1.62.0
+redis==5.0.1
+grpcio-reflection==1.60.0
+grpc-interceptor==0.15.4

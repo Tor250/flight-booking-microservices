@@ -1,0 +1,2 @@
+INSERT INTO flights (airline, origin, destination, departure_time, arrival_time, total_seats, available_seats, price, status)
+VALUES ('Aeroflot', 'SVO', 'LED', '2026-04-01 10:00', '2026-04-01 11:30', 100, 100, 5000.00, 'SCHEDULED');

@@ -1,0 +1,5 @@
+.env
+test_requests.sh
+/sentinel
+/redis
+/cluster
