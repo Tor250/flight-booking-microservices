@@ -2,6 +2,7 @@ import json
 import os
 import logging
 from redis.sentinel import Sentinel
+import redis
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +13,17 @@ SENTINEL_HOSTS = [
 ]
 SENTINEL_MASTER = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
 
-sentinel = Sentinel(SENTINEL_HOSTS, socket_timeout=0.5)
-redis_client = sentinel.master_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
-redis_slave = sentinel.slave_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
-
 DEFAULT_TTL = int(os.getenv("CACHE_TTL", "300"))
+
+try:
+    sentinel = Sentinel(SENTINEL_HOSTS, socket_timeout=0.5)
+    redis_client = sentinel.master_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
+    redis_slave = sentinel.slave_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
+    logger.info("[CACHE] Using Redis Sentinel")
+except Exception as e:
+    logger.warning(f"[CACHE] Sentinel failed, fallback to Redis master: {e}")
+    redis_client = redis.Redis(host="redis-master", port=6379, decode_responses=True)
+    redis_slave = redis_client
 
 
 def cache_get(key: str):
