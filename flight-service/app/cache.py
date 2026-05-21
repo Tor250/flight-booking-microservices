@@ -19,6 +19,8 @@ try:
     sentinel = Sentinel(SENTINEL_HOSTS, socket_timeout=0.5)
     redis_client = sentinel.master_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
     redis_slave = sentinel.slave_for(SENTINEL_MASTER, socket_timeout=0.5, decode_responses=True)
+    redis_client.ping()
+    redis_slave.ping()
     logger.info("[CACHE] Using Redis Sentinel")
 except Exception as e:
     logger.warning(f"[CACHE] Sentinel failed, fallback to Redis master: {e}")
@@ -64,43 +66,63 @@ def cache_invalidate(pattern: str):
 
 def flight_to_dict(flight_pb, pb2_module) -> dict:
     status_name = pb2_module.FlightStatus.Name(flight_pb.status)
+
+    departure_time = None
+    if flight_pb.HasField("departure_time"):
+        departure_time = flight_pb.departure_time.ToJsonString()
+
+    arrival_time = None
+    if flight_pb.HasField("arrival_time"):
+        arrival_time = flight_pb.arrival_time.ToJsonString()
+
     return {
         "id": flight_pb.id,
         "airline": flight_pb.airline,
+        "flight_number": flight_pb.flight_number,
         "origin": flight_pb.origin,
         "destination": flight_pb.destination,
-        "departure_time": flight_pb.departure_time.ToJsonString() if flight_pb.HasField('departure_time') else None,
-        "arrival_time": flight_pb.arrival_time.ToJsonString() if flight_pb.HasField('arrival_time') else None,
+        "departure_time": departure_time,
+        "arrival_time": arrival_time,
         "total_seats": flight_pb.total_seats,
         "available_seats": flight_pb.available_seats,
         "price": flight_pb.price,
-        "status": status_name
+        "status": status_name,
     }
 
 
 def dict_to_flight(data: dict, pb2_module) -> 'pb2.Flight':
     from google.protobuf.timestamp_pb2 import Timestamp
-    import datetime
-    
-    status_enum = pb2_module.FlightStatus.Value(data['status']) if isinstance(data['status'], str) else data['status']
-    
+
+    status_enum = data["status"]
+    if isinstance(data["status"], str):
+        status_enum = pb2_module.FlightStatus.Value(data["status"])
+
     dep_time = Timestamp()
-    if data.get('departure_time'):
-        dep_time.FromJsonString(data['departure_time'])
-    
+    if data.get("departure_time"):
+        dep_time.FromJsonString(data["departure_time"])
+
     arr_time = Timestamp()
-    if data.get('arrival_time'):
-        arr_time.FromJsonString(data['arrival_time'])
-    
+    if data.get("arrival_time"):
+        arr_time.FromJsonString(data["arrival_time"])
+
+    departure_field = Timestamp()
+    if data.get("departure_time"):
+        departure_field = dep_time
+
+    arrival_field = Timestamp()
+    if data.get("arrival_time"):
+        arrival_field = arr_time
+
     return pb2_module.Flight(
-        id=data['id'],
-        airline=data['airline'],
-        origin=data['origin'],
-        destination=data['destination'],
-        departure_time=dep_time if data.get('departure_time') else None,
-        arrival_time=arr_time if data.get('arrival_time') else None,
-        total_seats=data['total_seats'],
-        available_seats=data['available_seats'],
-        price=data['price'],
-        status=status_enum
+        id=data["id"],
+        airline=data["airline"],
+        flight_number=data.get("flight_number", ""),
+        origin=data["origin"],
+        destination=data["destination"],
+        departure_time=departure_field,
+        arrival_time=arrival_field,
+        total_seats=data["total_seats"],
+        available_seats=data["available_seats"],
+        price=data["price"],
+        status=status_enum,
     )

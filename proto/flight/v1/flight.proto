@@ -9,6 +9,14 @@ enum FlightStatus {
     SCHEDULED = 0;
     DEPARTED = 1;
     CANCELLED = 2;
+    COMPLETED = 3;
+}
+
+
+enum ReservationStatus {
+    ACTIVE = 0;
+    RELEASED = 1;
+    EXPIRED = 2;
 }
 
 
@@ -23,6 +31,7 @@ message Flight {
     int32 available_seats = 8;
     double price = 9;
     FlightStatus status = 10;
+    string flight_number = 11;
 }
 
 
@@ -38,6 +47,7 @@ message ReserveSeatsRequest {
 
 message ReserveSeatsResponse {
     bool success = 1;
+    ReservationStatus status = 2;
 }
 
 message ReleaseReservationRequest {
@@ -51,7 +61,7 @@ message ReleaseReservationResponse {
 message SearchFlightsRequest {
     string origin = 1;
     string destination = 2;
-    google.protobuf.Timestamp departure_date = 3;
+    google.protobuf.Timestamp date = 3;
 }
 
 message SearchFlightsResponse {
