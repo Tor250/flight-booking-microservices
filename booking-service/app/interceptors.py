@@ -37,6 +37,7 @@ class RetryCircuitBreakerInterceptor:
         self.failure_count = 0
         self.last_failure_time = None
         self.window_start = time.time()
+        self.half_open_probe_in_progress = False
         self._lock = threading.Lock()
 
         self.failure_threshold = int(os.getenv("CB_FAILURE_THRESHOLD", "5"))
@@ -72,6 +73,7 @@ class RetryCircuitBreakerInterceptor:
             if self.state != CircuitState.CLOSED:
                 logger.info("[CircuitBreaker] %s -> CLOSED (success)", self.state.value)
                 self.state = CircuitState.CLOSED
+            self.half_open_probe_in_progress = False
             self.failure_count = 0
             self.window_start = time.time()
 
@@ -88,9 +90,11 @@ class RetryCircuitBreakerInterceptor:
             if self.state == CircuitState.CLOSED and self.failure_count >= self.failure_threshold:
                 logger.warning("[CircuitBreaker] CLOSED -> OPEN (failures: %s)", self.failure_count)
                 self.state = CircuitState.OPEN
+                self.half_open_probe_in_progress = False
             elif self.state == CircuitState.HALF_OPEN:
                 logger.warning("[CircuitBreaker] HALF_OPEN -> OPEN (probe failed)")
                 self.state = CircuitState.OPEN
+                self.half_open_probe_in_progress = False
 
     def _can_execute(self) -> bool:
         with self._lock:
@@ -102,9 +106,13 @@ class RetryCircuitBreakerInterceptor:
                 if self.last_failure_time and now - self.last_failure_time >= self.reset_timeout:
                     logger.info("[CircuitBreaker] OPEN -> HALF_OPEN (timeout elapsed)")
                     self.state = CircuitState.HALF_OPEN
+                    self.half_open_probe_in_progress = True
                     return True
                 return False
             if self.state == CircuitState.HALF_OPEN:
+                if self.half_open_probe_in_progress:
+                    return False
+                self.half_open_probe_in_progress = True
                 return True
             return False
 
@@ -114,8 +122,14 @@ class RetryCircuitBreakerInterceptor:
             raise CircuitBreakerOpenError("Service temporarily unavailable (circuit breaker OPEN)")
 
         last_error = None
+        with self._lock:
+            is_half_open_probe = (
+                self.state == CircuitState.HALF_OPEN and self.half_open_probe_in_progress
+            )
 
-        for attempt in range(1, self.max_retries + 1):
+        max_attempts = 1 if is_half_open_probe else self.max_retries
+
+        for attempt in range(1, max_attempts + 1):
             try:
                 result = rpc_call()
                 self._record_success()
@@ -129,7 +143,7 @@ class RetryCircuitBreakerInterceptor:
                     self._record_failure()
                     raise
 
-                if attempt == self.max_retries:
+                if attempt == max_attempts:
                     logger.warning("[Retry] Max attempts reached for %s", method_name)
                     self._record_failure()
                     raise

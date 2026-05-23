@@ -1,6 +1,6 @@
 COMPOSE ?= docker compose
 
-.PHONY: help up down restart build ps logs logs-booking logs-flight test check sentinel auth clean
+.PHONY: help up down restart build ps logs logs-booking logs-flight test test-static verify-all check sentinel auth clean
 
 help:
 	@echo "Доступные команды:"
@@ -13,6 +13,8 @@ help:
 	@echo "  make logs-booking  - логи booking-service"
 	@echo "  make logs-flight   - логи flight-service"
 	@echo "  make test          - прогон test_requests.sh"
+	@echo "  make test-static   - проверка нерантаймных требований"
+	@echo "  make verify-all    - test + test-static"
 	@echo "  make check         - детальная проверка по инструкции"
 	@echo "  make sentinel      - проверить Redis Sentinel"
 	@echo "  make auth          - подсказка по проверке UNAUTHENTICATED"
@@ -46,6 +48,11 @@ logs-flight:
 
 test:
 	bash test_requests.sh
+
+test-static:
+	bash check_static_requirements.sh
+
+verify-all: test test-static
 
 check:
 	@echo "См. файл: удалить_перед_пушем/ИНСТРУКЦИЯ_ПРОВЕРКИ_ПО_ТРЕБОВАНИЯМ.md"
