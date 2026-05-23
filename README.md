@@ -81,7 +81,7 @@ erDiagram
     SEAT_RESERVATION {
         uuid id PK
         int flight_id FK
-        uuid booking_id UNIQUE
+        uuid booking_id UK
         int seat_count
         string status
         timestamp reserved_at
