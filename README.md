@@ -88,7 +88,7 @@ erDiagram
     SEAT_RESERVATION {
         uuid id PK "NOT NULL"
         int flight_id FK "NOT NULL"
-        uuid booking_id FK_UNIQUE "NOT NULL, логическая FK в Booking Service"
+        uuid booking_id FK "NOT NULL, UNIQUE, логическая FK в Booking Service"
         int seat_count "NOT NULL, CHECK > 0"
         reservation_status status "NOT NULL: ACTIVE|RELEASED|EXPIRED"
         timestamp reserved_at
