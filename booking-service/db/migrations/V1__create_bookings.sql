@@ -6,6 +6,6 @@ CREATE TABLE bookings (
     passenger_email TEXT NOT NULL,
     seat_count INT NOT NULL CHECK (seat_count > 0),
     total_price NUMERIC(10,2) NOT NULL CHECK (total_price > 0),
-    status TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('CONFIRMED', 'CANCELLED')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

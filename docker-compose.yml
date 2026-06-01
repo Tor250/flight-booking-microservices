@@ -98,28 +98,21 @@ services:
   redis-sentinel-1:
     image: redis:7-alpine
     depends_on:
-      - redis-master
-    command: >
-      sh -c "
-        mkdir -p /etc/redis;
-        cat > /etc/redis/sentinel.conf <<'EOF'
-        port 26379
-        bind 0.0.0.0
-        protected-mode no
-        daemonize no
-        logfile \"\"
-        sentinel monitor mymaster redis-master 6379 2
-        sentinel down-after-milliseconds mymaster 5000
-        sentinel failover-timeout mymaster 60000
-        sentinel parallel-syncs mymaster 1
-        sentinel announce-ip redis-sentinel-1
-        sentinel announce-port 26379
-        EOF
-        echo '[Sentinel-1] Config:'; cat /etc/redis/sentinel.conf;
-        exec redis-server /etc/redis/sentinel.conf --sentinel
-      "
+      redis-master:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - cp /etc/redis/sentinel-base.conf /tmp/sentinel.conf && exec redis-server /tmp/sentinel.conf --sentinel --protected-mode no --daemonize no
+    volumes:
+      - ./redis-sentinel-1.conf:/etc/redis/sentinel-base.conf:ro
     ports:
       - "26379:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       redis-net:
         aliases:
@@ -129,28 +122,21 @@ services:
   redis-sentinel-2:
     image: redis:7-alpine
     depends_on:
-      - redis-master
-    command: >
-      sh -c "
-        mkdir -p /etc/redis;
-        cat > /etc/redis/sentinel.conf <<'EOF'
-        port 26379
-        bind 0.0.0.0
-        protected-mode no
-        daemonize no
-        logfile \"\"
-        sentinel monitor mymaster redis-master 6379 2
-        sentinel down-after-milliseconds mymaster 5000
-        sentinel failover-timeout mymaster 60000
-        sentinel parallel-syncs mymaster 1
-        sentinel announce-ip redis-sentinel-2
-        sentinel announce-port 26379
-        EOF
-        echo '[Sentinel-2] Config:'; cat /etc/redis/sentinel.conf;
-        exec redis-server /etc/redis/sentinel.conf --sentinel
-      "
+      redis-master:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - cp /etc/redis/sentinel-base.conf /tmp/sentinel.conf && exec redis-server /tmp/sentinel.conf --sentinel --protected-mode no --daemonize no
+    volumes:
+      - ./redis-sentinel-2.conf:/etc/redis/sentinel-base.conf:ro
     ports:
       - "26380:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       redis-net:
         aliases:
@@ -160,28 +146,21 @@ services:
   redis-sentinel-3:
     image: redis:7-alpine
     depends_on:
-      - redis-master
-    command: >
-      sh -c "
-        mkdir -p /etc/redis;
-        cat > /etc/redis/sentinel.conf <<'EOF'
-        port 26379
-        bind 0.0.0.0
-        protected-mode no
-        daemonize no
-        logfile \"\"
-        sentinel monitor mymaster redis-master 6379 2
-        sentinel down-after-milliseconds mymaster 5000
-        sentinel failover-timeout mymaster 60000
-        sentinel parallel-syncs mymaster 1
-        sentinel announce-ip redis-sentinel-3
-        sentinel announce-port 26379
-        EOF
-        echo '[Sentinel-3] Config:'; cat /etc/redis/sentinel.conf;
-        exec redis-server /etc/redis/sentinel.conf --sentinel
-      "
+      redis-master:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - cp /etc/redis/sentinel-base.conf /tmp/sentinel.conf && exec redis-server /tmp/sentinel.conf --sentinel --protected-mode no --daemonize no
+    volumes:
+      - ./redis-sentinel-3.conf:/etc/redis/sentinel-base.conf:ro
     ports:
       - "26381:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       redis-net:
         aliases:
@@ -206,7 +185,7 @@ services:
       redis-master:
         condition: service_healthy
       redis-sentinel-1:
-        condition: service_started
+        condition: service_healthy
     networks:
       - backend
       - redis-net
